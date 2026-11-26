@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f5f7fb">
+<title>纯净天气</title>
+<style>
+  :root{
+    --bg:#f5f7fb; --card:#fff; --text:#172033; --muted:#6b7280;
+    --line:#e5e7eb; --accent:#2563eb; --accent2:#dbeafe;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",
+    "Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  header{
+    position:sticky; top:0; z-index:5; background:rgba(245,247,251,.94);
+    backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+    padding:calc(12px + env(safe-area-inset-top)) 16px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  h1{font-size:20px; margin:0 0 12px}
+  .search{display:flex; gap:8px; position:relative}
+  input{
+    flex:1; min-width:0; border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; font-size:16px; outline:none; background:#fff; color:var(--text);
+  }
+  input:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent2)}
+  button{
+    border:0; border-radius:12px; padding:12px 16px; font-size:15px;
+    background:var(--accent); color:#fff; cursor:pointer;
+  }
+  button:active{opacity:.85}
+  .suggest{
+    display:none; position:absolute; left:0; right:0; top:52px; background:#fff;
+    border:1px solid var(--line); border-radius:12px; overflow:hidden;
+    box-shadow:0 12px 30px rgba(0,0,0,.12); max-height:60vh; overflow-y:auto;
+  }
+  .suggest.show{display:block}
+  .suggest button{
+    display:block; width:100%; text-align:left; background:#fff; color:var(--text);
+    border-radius:0; border-bottom:1px solid var(--line); padding:12px 14px;
+    font-size:15px;
+  }
+  .suggest button:last-child{border-bottom:0}
+  main{max-width:760px; margin:0 auto; padding:16px}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:20px;
+    padding:20px; margin-bottom:16px; box-shadow:0 6px 20px rgba(15,23,42,.04);
+  }
+  .hidden{display:none}
+  .city{font-size:16px; color:var(--muted); margin-bottom:8px}
+  .temp{font-size:64px; font-weight:700; line-height:1; letter-spacing:-2px}
+  .desc{font-size:20px; margin:10px 0 14px}
+  .meta{color:var(--muted); font-size:14px; line-height:1.8}
+  h2{font-size:17px; margin:0 0 12px}
+  .days{display:grid; gap:10px}
+  .day{
+    display:grid; grid-template-columns:76px 40px 1fr auto; gap:10px;
+    align-items:center; padding:12px; border:1px solid var(--line);
+    border-radius:14px; background:#fff;
+  }
+  .day small{color:var(--muted)}
+  .icon{font-size:24px; text-align:center}
+  .range{font-weight:600; white-space:nowrap}
+  .rain{grid-column:1/-1; color:var(--muted); font-size:13px; margin-top:-4px}
+  #status{color:var(--muted); font-size:13px; text-align:center; min-height:20px; margin:0 0 20px}
+  @media (max-width:480px){
+    .temp{font-size:56px}
+    .day{grid-template-columns:64px 36px 1fr auto; padding:10px}
+    .card{padding:16px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>纯净天气</h1>
+  <div class="search">
+    <input id="q" placeholder="输入城市，如：北京" autocomplete="off" enterkeyhint="search">
+    <button id="searchBtn">搜索</button>
+    <div id="suggest" class="suggest"></div>
+  </div>
+</header>
+
+<main>
+  <section id="current" class="card hidden">
+    <div id="cityName" class="city"></div>
+    <div id="temp" class="temp"></div>
+    <div id="desc" class="desc"></div>
+    <div id="meta" class="meta"></div>
+  </section>
+
+  <section class="card">
+    <h2>未来 7 天</h2>
+    <div id="daily" class="days"></div>
+  </section>
+
+  <p id="status"></p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+const WEATHER = {
+  0:'晴', 1:'大部晴朗', 2:'多云', 3:'阴',
+  45:'雾', 48:'雾凇',
+  51:'小毛毛雨', 53:'毛毛雨', 55:'大毛毛雨',
+  56:'冻毛毛雨', 57:'强冻毛毛雨',
+  61:'小雨', 63:'中雨', 65:'大雨',
+  66:'冻雨', 67:'强冻雨',
+  71:'小雪', 73:'中雪', 75:'大雪', 77:'雪粒',
+  80:'小阵雨', 81:'中阵雨', 82:'强阵雨',
+  85:'小阵雪', 86:'强阵雪',
+  95:'雷暴', 96:'雷暴伴小冰雹', 99:'雷暴伴大冰雹'
+};
+
+function codeDesc(c){ return WEATHER[c] || '未知天气'; }
+
+function codeEmoji(c){
+  if(c === 0) return '☀️';
+  if(c === 1) return '🌤️';
+  if(c === 2) return '⛅';
+  if(c === 3) return '☁️';
+  if(c === 45 || c === 48) return '🌫️';
+  if(c >= 51 && c <= 67) return '🌧️';
+  if(c >= 71 && c <= 77) return '❄️';
+  if(c >= 80 && c <= 82) return '🌦️';
+  if(c >= 85 && c <= 86) return '🌨️';
+  if(c >= 95) return '⛈️';
+  return '🌡️';
+}
+
+let state = { lat:39.9042, lon:116.4074, name:'北京' };
+
+async function loadWeather(lat, lon, name){
+  $('status').textContent = '加载中…';
+  $('current').classList.remove('hidden');
+
+  const url =
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m` +
+    `&daily=weather_code,tem
