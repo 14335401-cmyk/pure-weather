@@ -1,0 +1,8 @@
+{
+  "appId": "com.example.pureweather",
+  "appName": "纯净天气",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
